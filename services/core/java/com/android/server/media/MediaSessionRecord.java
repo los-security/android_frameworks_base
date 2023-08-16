@@ -789,6 +789,13 @@ public class MediaSessionRecord implements IBinder.DeathRecipient {
             mMediaButtonReceiver = pi;
             final long token = Binder.clearCallingIdentity();
             try {
+                if (pi != null && pi.isActivity()) {
+                    Log.w(
+                            TAG,
+                            "Ignoring invalid media button receiver targeting an activity: " + pi);
+                    return;
+                }
+
                 mService.onMediaButtonReceiverChanged(MediaSessionRecord.this);
             } finally {
                 Binder.restoreCallingIdentity(token);
