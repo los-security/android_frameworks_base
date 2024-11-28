@@ -1072,7 +1072,7 @@ final class ActivityRecord extends ConfigurationContainer implements AppWindowCo
         newTask.addActivityAtIndex(position, this);
     }
 
-    private boolean isHomeIntent(Intent intent) {
+    static boolean isHomeIntent(Intent intent) {
         return ACTION_MAIN.equals(intent.getAction())
                 && intent.hasCategory(CATEGORY_HOME)
                 && intent.getCategories().size() == 1
