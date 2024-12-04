@@ -21092,8 +21092,7 @@ public class ActivityManagerService extends IActivityManager.Stub
                             + ") when registering receiver " + receiver);
                 }
                 if (callerApp.info.uid != SYSTEM_UID &&
-                        !callerApp.pkgList.containsKey(callerPackage) &&
-                        !"android".equals(callerPackage)) {
+                        !callerApp.pkgList.containsKey(callerPackage)) {
                     throw new SecurityException("Given caller package " + callerPackage
                             + " is not running in process " + callerApp);
                 }
