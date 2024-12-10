@@ -24,6 +24,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.usage.UsageStatsManager;
 import android.content.ComponentName;
+import android.content.ContentProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentSender;
@@ -39,6 +40,7 @@ import android.database.DataSetObserver;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -269,7 +271,11 @@ public class ChooserActivity extends ResolverActivity {
                     targets = null;
                     break;
                 }
-                targets[i] = (ChooserTarget) pa[i];
+                ChooserTarget chooserTarget = (ChooserTarget) pa[i];
+                if (!hasValidIcon(chooserTarget)) {
+                    chooserTarget = removeIcon(chooserTarget);
+                }
+                targets[i] = chooserTarget;
             }
             mCallerChooserTargets = targets;
         }
@@ -1613,5 +1619,51 @@ public class ChooserActivity extends ResolverActivity {
 
             mResolverDrawerLayout.setCollapsibleHeightReserved(offset);
         }
+    }
+
+    private boolean hasValidIcon(ChooserTarget target) {
+        Icon icon = target.getIcon();
+        if (icon == null) {
+            return true;
+        }
+        if (icon.getType() == Icon.TYPE_URI /*|| icon.getType() == Icon.TYPE_URI_ADAPTIVE_BITMAP*/) {
+            Uri uri = icon.getUri();
+            try {
+                IBinder activityToken = getActivityToken();
+                final int uid = ActivityManager.getService().getLaunchedFromUid(activityToken);
+                if (uid != Process.SYSTEM_UID && uid != Process.ROOT_UID) {
+                    return false;
+                }
+                if (ActivityManager.checkComponentPermission(
+                        android.Manifest.permission.INTERACT_ACROSS_USERS_FULL,
+                        uid, /* owningUid = */-1, /* exported = */ true)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    return false;
+                }
+                ActivityManager.getService().checkGrantUriPermission(
+                        uid,
+                        getPackageName(),
+                        ContentProvider.getUriWithoutUserId(uri),
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        ContentProvider.getUserIdFromUri(uri, UserHandle.getUserId(uid))
+                );
+            } catch (SecurityException | RemoteException e) {
+                Log.e(TAG, "Failed to get URI permission for: " + uri, e);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static ChooserTarget removeIcon(ChooserTarget target) {
+        if (target == null) {
+            return null;
+        }
+        return new ChooserTarget(
+                target.getTitle(),
+                null,
+                target.getScore(),
+                target.getComponentName(),
+                target.getIntentExtras());
     }
 }
