@@ -1537,6 +1537,7 @@ public class NotificationManagerService extends SystemService {
                 mRankingHandler,
                 mZenModeHelper,
                 mUsageStats,
+                mAm,
                 extractorNames);
         mSnoozeHelper = snoozeHelper;
         mGroupHelper = groupHelper;
@@ -3720,7 +3721,8 @@ public class NotificationManagerService extends SystemService {
             final Uri soundUri = updateChannel.getSound();
             final Uri originalSoundUri =
                     (originalChannel != null) ? originalChannel.getSound() : null;
-            if (soundUri != null && !Objects.equals(originalSoundUri, soundUri)) {
+            if (soundUri != null && !Objects.equals(originalSoundUri, soundUri) &&
+                 ContentResolver.SCHEME_CONTENT.equals(soundUri.getScheme())) {
                 Binder.withCleanCallingIdentity(() -> {
                     mAm.checkGrantUriPermission(sourceUid, null,
                             ContentProvider.getUriWithoutUserId(soundUri),

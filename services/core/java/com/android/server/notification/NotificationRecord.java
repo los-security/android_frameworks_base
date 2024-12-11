@@ -1089,7 +1089,9 @@ public final class NotificationRecord {
      * {@link SecurityException} depending on target SDK of enqueuing app.
      */
     private void visitGrantableUri(Uri uri, boolean userOverriddenUri) {
-        if (uri == null || !ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) return;
+        if (mGrantableUris != null && mGrantableUris.contains(uri)) {
+            return; // already verified this URI
+        }
 
         // We can't grant Uri permissions from system
         final int sourceUid = sbn.getUid();
@@ -1097,18 +1099,20 @@ public final class NotificationRecord {
 
         final long ident = Binder.clearCallingIdentity();
         try {
-            // This will throw SecurityException if caller can't grant
-            mAm.checkGrantUriPermission(sourceUid, null,
-                    ContentProvider.getUriWithoutUserId(uri),
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                    ContentProvider.getUserIdFromUri(uri, UserHandle.getUserId(sourceUid)));
+            if (uri != null && ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) {
+                Binder.withCleanCallingIdentity(() -> {
+                    // This will throw SecurityException if caller can't grant
+                    mAm.checkGrantUriPermission(sourceUid, null,
+                            ContentProvider.getUriWithoutUserId(uri),
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                            ContentProvider.getUserIdFromUri(uri, UserHandle.getUserId(sourceUid)));
+                });
+            }
 
             if (mGrantableUris == null) {
                 mGrantableUris = new ArraySet<>();
             }
             mGrantableUris.add(uri);
-        } catch (RemoteException ignored) {
-            // Ignored because we're in same process
         } catch (SecurityException e) {
             if (!userOverriddenUri) {
                 if (mTargetSdkVersion >= Build.VERSION_CODES.P) {
@@ -1117,8 +1121,6 @@ public final class NotificationRecord {
                     Log.w(TAG, "Ignoring " + uri + " from " + sourceUid + ": " + e.getMessage());
                 }
             }
-        } finally {
-            Binder.restoreCallingIdentity(ident);
         }
     }
 

@@ -19,16 +19,23 @@ import static android.app.NotificationManager.IMPORTANCE_NONE;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.app.ActivityManager;
+import android.app.IActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationChannelGroup;
 import android.app.NotificationManager;
+import android.content.ContentProvider;
+import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ParceledListSlice;
 import android.metrics.LogMaker;
+import android.net.Uri;
+import android.os.Binder;
 import android.os.Build;
 import android.os.UserHandle;
 import android.provider.Settings.Secure;
@@ -114,6 +121,8 @@ public class RankingHelper implements RankingConfig {
     private final ArrayMap<String, NotificationRecord> mProxyByGroupTmp = new ArrayMap<>();
     private final ArrayMap<String, Record> mRestoredWithoutUids = new ArrayMap<>(); // pkg => Record
 
+    private final IActivityManager mAm;
+
     private final Context mContext;
     private final RankingHandler mRankingHandler;
     private final PackageManager mPm;
@@ -122,10 +131,14 @@ public class RankingHelper implements RankingConfig {
     private boolean mAreChannelsBypassingDnd;
     private ZenModeHelper mZenModeHelper;
 
+
+
     public RankingHelper(Context context, PackageManager pm, RankingHandler rankingHandler,
-            ZenModeHelper zenHelper, NotificationUsageStats usageStats, String[] extractorNames) {
+            ZenModeHelper zenHelper, NotificationUsageStats usageStats, IActivityManager am,
+            String[] extractorNames) {
         mContext = context;
         mRankingHandler = rankingHandler;
+        mAm = am;
         mPm = pm;
         mZenModeHelper= zenHelper;
 
@@ -612,6 +625,7 @@ public class RankingHelper implements RankingConfig {
         Preconditions.checkNotNull(channel);
         Preconditions.checkNotNull(channel.getId());
         Preconditions.checkArgument(!TextUtils.isEmpty(channel.getName()));
+        Uri uri;
         Record r = getOrCreateRecord(pkg, uid);
         if (r == null) {
             throw new IllegalArgumentException("Invalid package");
@@ -674,6 +688,21 @@ public class RankingHelper implements RankingConfig {
             channel.setLockscreenVisibility(r.visibility);
         }
         clearLockedFields(channel);
+
+        // Verify that the app has permission to read the sound Uri
+        // Only check for new channels, as regular apps can only set sound
+        // before creating. See: {@link NotificationChannel#setSound}
+        uri = channel.getSound();
+        if (uri != null && ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) {
+            Binder.withCleanCallingIdentity(() -> {
+                // This will throw a SecurityException if the caller can't grant.
+                mAm.checkGrantUriPermission(uid, null,
+                        ContentProvider.getUriWithoutUserId(uri),
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        ContentProvider.getUserIdFromUri(uri, UserHandle.getUserId(uid)));
+            });
+        }
+
         if (channel.getLockscreenVisibility() == Notification.VISIBILITY_PUBLIC) {
             channel.setLockscreenVisibility(Ranking.VISIBILITY_NO_OVERRIDE);
         }
