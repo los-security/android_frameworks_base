@@ -170,40 +170,50 @@ public class IntentForwarderActivity extends Activity  {
                 Intent.FLAG_ACTIVITY_FORWARD_RESULT | Intent.FLAG_ACTIVITY_PREVIOUS_IS_TOP);
         sanitizeIntent(forwardIntent);
 
+        if (!canForwardInner(forwardIntent, getUserId(), targetUserId)) {
+            return null;
+        }
+
+        if (forwardIntent.getSelector() != null) {
+            sanitizeIntent(forwardIntent.getSelector());
+            if (!canForwardInner(forwardIntent, getUserId(), targetUserId)) {
+                return null;
+            }
+        }
+        return forwardIntent;
+    }
+
+    private boolean canForwardInner(Intent forwardIntent, int sourceUserId, int targetUserId) {
         Intent intentToCheck = forwardIntent;
         if (Intent.ACTION_CHOOSER.equals(forwardIntent.getAction())) {
             // The EXTRA_INITIAL_INTENTS may not be allowed to be forwarded.
             if (forwardIntent.hasExtra(Intent.EXTRA_INITIAL_INTENTS)) {
                 Slog.wtf(TAG, "An chooser intent with extra initial intents cannot be forwarded to"
                         + " a different user");
-                return null;
+                return false;
             }
             if (forwardIntent.hasExtra(Intent.EXTRA_REPLACEMENT_EXTRAS)) {
                 Slog.wtf(TAG, "A chooser intent with replacement extras cannot be forwarded to a"
                         + " different user");
-                return null;
+                return false;
             }
             intentToCheck = forwardIntent.getParcelableExtra(Intent.EXTRA_INTENT);
             if (intentToCheck == null) {
                 Slog.wtf(TAG, "Cannot forward a chooser intent with no extra "
                         + Intent.EXTRA_INTENT);
-                return null;
+                return false;
             }
         }
-        if (forwardIntent.getSelector() != null) {
-            intentToCheck = forwardIntent.getSelector();
-        }
         String resolvedType = intentToCheck.resolveTypeIfNeeded(getContentResolver());
-        sanitizeIntent(intentToCheck);
         try {
             if (mInjector.getIPackageManager().
-                    canForwardTo(intentToCheck, resolvedType, getUserId(), targetUserId)) {
-                return forwardIntent;
+                    canForwardTo(intentToCheck, resolvedType, sourceUserId, targetUserId)) {
+                return true;
             }
         } catch (RemoteException e) {
             Slog.e(TAG, "PackageManagerService is dead?");
         }
-        return null;
+        return false;
     }
 
     /**
