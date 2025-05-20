@@ -73,6 +73,16 @@ public class StaticIpConfiguration implements Parcelable {
         domains = null;
     }
 
+    /** @hide */
+    public List<InetAddress> getDnsServers() {
+        return dnsServers;
+    }
+
+    /** @hide */
+    public String getDomains() {
+        return domains;
+    }
+
     /**
      * Returns the network routes specified by this object. Will typically include a
      * directly-connected route for the IP address's local subnet and a default route. If the
